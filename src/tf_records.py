@@ -1,32 +1,100 @@
+"""
+Code to create tf_records.
+This code is based on https://keras.io/examples/keras_recipes/creating_tfrecords/
+"""
+
 import parser
+import time
+import os
 import tensorflow as tf
-import numpy as np
 from glob import glob
-from PIL import image
 
-BASE_FOLDER = "/home/monfre/tf_make_dataset/src"
-HEIGHT = WIDTH = 256 # Input images must be squared
+######################### ARGUMENTS ################################
+ROOT = "/home/monfre/tf_make_dataset/src"
+NUM_SAMPLES = 32 # number of samples per tf_record
 
-# Convert images to bytes list
-def _bytes_feature(value):
-return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-# Instance of TFRecord
-tf_record_path = BASE_FOLDER + f"/datasets/processed/{args.path_user}"
-writer = tf.python_io.TFRecordWriter(tf_record_path)
+######################### HELPER FUNCTIONS #########################
+def resize_image(img, height, width):
+    return tf.image.resize(img, [height, width])
 
-# Directory of unprcessed images 
-data_dir = BASE_FOLDER + f"/datasets/raw/{args.path_user}"
-images_path = glob(data_dir + "/*")
-for file in images_path:
-    img = PIL.Image.open(file)
-    img = np.array(img.resize(HEIGHT, WIDTH))
+
+def image_feature(value):
+    """Returns a bytes_list from a string / byte."""
+    # TODO: does unit8 conversion affect negatively things?
+    uint_value = tf.image.convert_image_dtype(value, dtype=tf.uint8)
+    return tf.train.Feature(
+        bytes_list=tf.train.BytesList(value=[tf.io.encode_jpeg(uint_value).numpy()])
+    )
+
+
+def bytes_feature(value):
+    """Returns a bytes_list from a string / byte."""
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value.encode()]))
+
+
+def float_feature(value):
+    """Returns a float_list from a float / double."""
+    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+
+
+def int64_feature(value):
+    """Returns an int64_list from a bool / enum / int / uint."""
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
+def float_feature_list(value):
+    """Returns a list of float_list from a float / double."""
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+
+def create_example(example):
+    # GAN sample
     feature = {
-        'image': _bytes_feature(img), 
-        'label': _bytes_feature(img.tostring()) # tostring() alias for tobytes(). Convert numpy to bytes
+        'image': image_feature(example),
+        'label': image_feature(example),
     }
-    
-    example = tf.train.Example(features=tf.train.Features(feature=feature))
-    writer.write(example.SerializeToString())
+    return tf.train.Example(features=tf.train.Features(feature=feature))
 
-writer.close()
+def parse_tfrecord_fn(example):
+    """
+    Return an example in the form of : image, image
+    """
+    feature_description = {
+        "image": tf.io.FixedLenFeature([], tf.string),
+        "label": tf.io.FixedLenFeature([], tf.string)
+    }
+    example = tf.io.parse_single_example(example, feature_description)
+    example["image"] = tf.io.decode_jpeg(example["image"], channels=3)
+    example["label"] = tf.io.decode_jpeg(example["image"], channels=3)
+    return example
+
+######################### MAIN #####################################
+def make_dataset(args):
+    start = time.time()
+    images_dir = ROOT + f"/datasets/raw/{args.path_user}"
+    images_list = sorted(glob(images_dir + "/*")) # list with paths to images
+    tfrecords_dir = ROOT + f"/datasets/tfrecords/{args.path_user}"
+    num_tfrecords = len(images_list) // NUM_SAMPLES
+
+    if not os.path.exists(tfrecords_dir):
+        os.makedirs(tfrecords_dir)
+
+    # Generate data in tfrecords format
+    for tfrec_num in range(num_tfrecords):
+        img_paths = images_list[(tfrec_num*NUM_SAMPLES) : ((tfrec_num+1)*NUM_SAMPLES)]
+        # Write samples on a TFRecord
+        with tf.io.TFRecordWriter(
+            tfrecords_dir + f"/file_{tfrec_num}.tfrec") as writer:
+            for img_path in img_paths:
+                image = resize_image(
+                    tf.io.decode_jpeg(tf.io.read_file(img_path)),
+                    args.height, args.width
+                )
+                example = create_example(image)
+                writer.write(example.SerializeToString())
+
+    print(f"Processing time for {len(images_list)} images: {round (time.time() - start, 1)} s")
+
+if __name__ == "__main__":
+    make_dataset(parser.parsed_args())

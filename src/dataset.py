@@ -10,7 +10,7 @@ import parser
 import tensorflow as tf
 from glob import glob
 
-BASE_FOLDER = "/home/monfre/tf_make_dataset/src"
+ROOT = "/home/monfre/tf_make_dataset/src"
 
 # Not all images have the same resolution. 
 # Before choosing, I should plot summary (count) of resolutions. Then decide
@@ -41,7 +41,7 @@ def configure_for_performance(ds):
   return ds
 
 def make_dataset(args):
-    data_dir = BASE_FOLDER + f"/datasets/raw/{args.path_user}"
+    data_dir = ROOT + f"/datasets/raw/{args.path_user}"
     img_count = len(glob(data_dir + "/*"))
     
     list_ds = tf.data.Dataset.list_files(data_dir + '/[1-9]*.jpg', shuffle=False)
@@ -55,7 +55,7 @@ def make_dataset(args):
             print("Label: ", label.numpy().shape)
 
     # Save processed dataset
-    output_path = BASE_FOLDER + f"/datasets/processed/{args.path_user}"
+    output_path = ROOT + f"/datasets/processed/{args.path_user}"
     tf.data.experimental.save(train_ds, output_path)  
 
     # To load the dataset
