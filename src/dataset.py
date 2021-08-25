@@ -5,13 +5,19 @@ The code process images, performing resizing.
 The dataset is meant for GAN training.
 It returns a dataset where each sample is a (img, img) tuple. 
 """
+
 import parser
 import tensorflow as tf
 from glob import glob
 
 BASE_FOLDER = "/home/monfre/tf_make_dataset/src"
-HEIGHT = 256
-WIDTH = 256
+
+# Not all images have the same resolution. 
+# Before choosing, I should plot summary (count) of resolutions. Then decide
+# If only one image is low res, of course we discard that one. 
+
+# Input images must be squared
+HEIGHT = WIDTH = 256
 
 def decode_img(img):
     # convert the compressed string to a 3D uint8 tensor
@@ -24,7 +30,7 @@ def process_path(file_path):
     img = decode_img(img)
 
     # Second img is for label, remove if not necessary
-    return img, img
+    return tf.transpose(img, [2, 0, 1]), tf.transpose(img, [2, 0, 1])
 
 # TODO: customize, this is copy and pasted from https://www.tensorflow.org/tutorials/load_data/images
 def configure_for_performance(ds):
@@ -38,7 +44,7 @@ def make_dataset(args):
     data_dir = BASE_FOLDER + f"/datasets/raw/{args.path_user}"
     img_count = len(glob(data_dir + "/*"))
     
-    list_ds = tf.data.Dataset.list_files(data_dir + '/*.jpg', shuffle=False)
+    list_ds = tf.data.Dataset.list_files(data_dir + '/[1-9]*.jpg', shuffle=False)
 
     AUTOTUNE = tf.data.AUTOTUNE
     train_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
@@ -54,7 +60,7 @@ def make_dataset(args):
 
     # To load the dataset
     if args.verbose:
-        new_dataset = tf.data.experimental.load(output_path)
+        new_dataset = tf.data.experimental.load(path=output_path)
         for elem in new_dataset:
             print(elem)
             break

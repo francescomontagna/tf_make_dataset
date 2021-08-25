@@ -1,3 +1,6 @@
 /instagram-scraper.log
 /personal_note.txt
-./datasets
+src/datasets
+src/__pycache__
+*pycache*
+envs
